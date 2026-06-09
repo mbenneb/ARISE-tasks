@@ -324,6 +324,11 @@
 </div>
 
 <script>
+ 
+if (!window.supabase) {
+  alert("Supabase failed to load. Check script tag.");
+}
+
 const supabase = window.supabase.createClient(
   "https://rxspfdpubsttexhggfkm.supabase.co/rest/v1/",
   "sb_secret_ANVemQB6Trnt6PsZk9xF_Q_bZdvF-H5"
