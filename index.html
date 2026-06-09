@@ -222,6 +222,7 @@
     .tabs { padding: 0 16px; }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -323,22 +324,15 @@
 </div>
 
 <script>
-const STORAGE_KEY = 'taskboard_v1';
+const supabase = window.supabase.createClient(
+  "YOUR_PROJECT_URL",
+  "YOUR_ANON_KEY"
+);
+
+let data = { members: [], tasks: [] };
 let editingId = null;
 
-function load() {
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; }
-  catch(e) { return null; }
-}
-function save(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
-}
-
-let data = load() || {
-  members: ['Gina','Dragana','Matt','Alex','Scott','Elaine'],
-  tasks: []
-};
-
+/* ---------- HELPERS ---------- */
 function initials(name) { return name.split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2); }
 function fmtDate(iso) {
   if(!iso) return '';
@@ -350,24 +344,55 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+/* ---------- LOAD DATA ---------- */
+async function loadData() {
+  const { data: tasksData } = await supabase.from("tasks").select("*");
+  const { data: membersData } = await supabase.from("members").select("*");
+  const { data: links } = await supabase.from("task_assignees").select("*");
+
+  data.tasks = tasksData.map(t => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    created: t.created,
+    assignees: links
+      .filter(l => l.task_id === t.id)
+      .map(l => l.member_name)
+  }));
+
+  data.members = membersData.map(m => m.name);
+
+  renderAll();
+}
+
+/* ---------- RENDER (UNCHANGED) ---------- */
 function renderKanban() {
   ['todo','done'].forEach(status => {
     const col = document.getElementById('col-'+status);
     const tasks = data.tasks.filter(t=>t.status===status);
     document.getElementById('count-'+status).textContent = tasks.length;
+
     if(!tasks.length) {
       col.innerHTML = '<div class="empty"><div class="empty-icon">○</div>No tasks here</div>';
       return;
     }
+
     col.innerHTML = tasks.map(t => `
       <div class="task-card${t.status==='done'?' done':''}" onclick="openEditModal('${t.id}')">
-        <button class="check-btn" onclick="event.stopPropagation();toggleDone('${t.id}')" title="Mark done">✓</button>
+        <button class="check-btn" onclick="event.stopPropagation();toggleDone('${t.id}')"
+        title="${t.status==='done'?'Mark not done':'Mark done'}">✓</button>
+
         <div class="task-title">${escHtml(t.title)}</div>
+
         <div class="task-meta">
-          ${(t.assignees||[]).map(a=>`<div class="assignee-bubble" title="${escHtml(a)}">${initials(a)}</div>`).join('')}
+          ${(t.assignees||[]).map(a=>
+            `<div class="assignee-bubble" title="${escHtml(a)}">${initials(a)}</div>`
+          ).join('')}
           <span class="task-date">${fmtDate(t.created)}</span>
         </div>
-      </div>`).join('');
+      </div>
+    `).join('');
   });
 }
 
@@ -376,23 +401,31 @@ function renderList() {
   const fs = document.getElementById('filter-status').value;
   const fa = document.getElementById('filter-assignee').value;
   const container = document.getElementById('list-container');
+
   let tasks = data.tasks.filter(t => {
     if(search && !t.title.toLowerCase().includes(search)) return false;
     if(fs && t.status !== fs) return false;
     if(fa && !(t.assignees||[]).includes(fa)) return false;
     return true;
   });
+
   if(!tasks.length) {
     container.innerHTML = '<div class="empty"><div class="empty-icon">○</div>No tasks match</div>';
     return;
   }
+
   container.innerHTML = tasks.map(t => `
     <div class="list-item${t.status==='done'?' done':''}" onclick="openEditModal('${t.id}')">
-      <button class="li-check" onclick="event.stopPropagation();toggleDone('${t.id}')" title="Mark done">✓</button>
+      <button class="li-check" onclick="event.stopPropagation();toggleDone('${t.id}')" title="Toggle done">✓</button>
       <div class="li-title">${escHtml(t.title)}</div>
       <span class="li-status ${statusClass(t.status)}">${statusLabel(t.status)}</span>
-      <div class="li-assignees">${(t.assignees||[]).map(a=>`<div class="assignee-bubble" title="${escHtml(a)}">${initials(a)}</div>`).join('')}</div>
-    </div>`).join('');
+      <div class="li-assignees">
+        ${(t.assignees||[]).map(a=>
+          `<div class="assignee-bubble" title="${escHtml(a)}">${initials(a)}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 function renderTeam() {
@@ -401,34 +434,56 @@ function renderTeam() {
       <div class="member-avatar">${initials(m)}</div>
       <div class="member-name">${escHtml(m)}</div>
       <button class="btn btn-sm btn-danger" onclick="removeMember('${escHtml(m)}')">Remove</button>
-    </div>`).join('');
+    </div>
+  `).join('');
+
   const sel = document.getElementById('filter-assignee');
-  const cur = sel.value;
   sel.innerHTML = '<option value="">All members</option>' +
-    data.members.map(m=>`<option value="${escHtml(m)}"${m===cur?' selected':''}>${escHtml(m)}</option>`).join('');
+    data.members.map(m=>`<option value="${escHtml(m)}">${escHtml(m)}</option>`).join('');
 }
 
 function renderAll() { renderKanban(); renderList(); renderTeam(); }
 
-function toggleDone(id) {
+/* ---------- TASK ACTIONS ---------- */
+async function toggleDone(id) {
   const t = data.tasks.find(t=>t.id===id);
-  if(!t) return;
-  t.status = t.status==='done' ? 'todo' : 'done';
-  save(data); renderAll();
+  await supabase.from("tasks")
+    .update({ status: t.status==='done' ? 'todo' : 'done' })
+    .eq("id", id);
+
+  loadData();
 }
 
-function showTab(tab) {
-  ['kanban','list','team'].forEach(v => {
-    document.getElementById('view-'+v).style.display = v===tab?'block':'none';
-    document.getElementById('tab-'+v)?.classList.toggle('active', v===tab);
-  });
-  if(tab==='list') renderList();
-  if(tab==='team') renderTeam();
+/* ---------- MODAL ---------- */
+function openAddModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'New Task';
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-status').value = 'todo';
+  buildAssigneePicker([]);
+  document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('open');
 }
 
+function openEditModal(id) {
+  const t = data.tasks.find(t=>t.id===id);
+  editingId = id;
+  document.getElementById('f-title').value = t.title;
+  document.getElementById('f-desc').value = t.description || '';
+  document.getElementById('f-status').value = t.status;
+  document.getElementById('delete-btn').style.display = 'inline-block';
+  buildAssigneePicker(t.assignees);
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+/* ---------- ASSIGNEES ---------- */
 function buildAssigneePicker(selected) {
   document.getElementById('assignee-picker').innerHTML = data.members.map(m => `
-    <div class="assignee-chip${(selected||[]).includes(m)?' selected':''}" onclick="this.classList.toggle('selected')">${escHtml(m)}</div>
+    <div class="assignee-chip ${(selected||[]).includes(m)?'selected':''}"
+      onclick="this.classList.toggle('selected')">${escHtml(m)}</div>
   `).join('');
 }
 
@@ -436,72 +491,70 @@ function getSelectedAssignees() {
   return [...document.querySelectorAll('.assignee-chip.selected')].map(el=>el.textContent);
 }
 
-function openAddModal() {
-  editingId = null;
-  document.getElementById('modal-title').textContent = 'New Task';
-  document.getElementById('f-title').value = '';
-  document.getElementById('f-desc').value = '';
-  document.getElementById('f-status').value = 'todo';
-  document.getElementById('delete-btn').style.display = 'none';
-  buildAssigneePicker([]);
-  document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('f-title').focus(), 50);
-}
-
-function openEditModal(id) {
-  const t = data.tasks.find(t=>t.id===id);
-  if(!t) return;
-  editingId = id;
-  document.getElementById('modal-title').textContent = 'Edit Task';
-  document.getElementById('f-title').value = t.title;
-  document.getElementById('f-desc').value = t.description||'';
-  document.getElementById('f-status').value = t.status;
-  document.getElementById('delete-btn').style.display = 'inline-block';
-  buildAssigneePicker(t.assignees||[]);
-  document.getElementById('modal-overlay').classList.add('open');
-}
-
-function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
-function handleOverlayClick(e) { if(e.target===document.getElementById('modal-overlay')) closeModal(); }
-
-function saveTask() {
+/* ---------- SAVE TASK ---------- */
+async function saveTask() {
   const title = document.getElementById('f-title').value.trim();
-  if(!title) { document.getElementById('f-title').focus(); return; }
-  const task = {
-    id: editingId || Date.now().toString(36)+Math.random().toString(36).slice(2),
+  if(!title) return;
+
+  const id = editingId || Date.now().toString();
+
+  await supabase.from("tasks").upsert({
+    id,
     title,
     description: document.getElementById('f-desc').value.trim(),
     status: document.getElementById('f-status').value,
-    assignees: getSelectedAssignees(),
-    created: editingId ? (data.tasks.find(t=>t.id===editingId)?.created || new Date().toISOString()) : new Date().toISOString()
-  };
-  if(editingId) { data.tasks[data.tasks.findIndex(t=>t.id===editingId)] = task; }
-  else { data.tasks.unshift(task); }
-  save(data); closeModal(); renderAll();
+    created: new Date().toISOString()
+  });
+
+  await supabase.from("task_assignees").delete().eq("task_id", id);
+
+  const assignees = getSelectedAssignees().map(name => ({
+    task_id: id,
+    member_name: name
+  }));
+
+  if (assignees.length) {
+    await supabase.from("task_assignees").insert(assignees);
+  }
+
+  closeModal();
+  loadData();
 }
 
-function deleteTask() {
-  if(!editingId || !confirm('Delete this task?')) return;
-  data.tasks = data.tasks.filter(t=>t.id!==editingId);
-  save(data); closeModal(); renderAll();
+/* ---------- DELETE ---------- */
+async function deleteTask() {
+  if(!editingId) return;
+
+  await supabase.from("tasks").delete().eq("id", editingId);
+  await supabase.from("task_assignees").delete().eq("task_id", editingId);
+
+  closeModal();
+  loadData();
 }
 
-function addMember() {
+/* ---------- TEAM ---------- */
+async function addMember() {
   const input = document.getElementById('new-member-input');
   const name = input.value.trim();
-  if(!name || data.members.includes(name)) { input.focus(); return; }
-  data.members.push(name); save(data); input.value = ''; renderTeam();
+  if(!name) return;
+
+  await supabase.from("members").insert({ name });
+
+  input.value = '';
+  loadData();
 }
 
-function removeMember(name) {
-  if(!confirm(`Remove ${name} from the team?`)) return;
-  data.members = data.members.filter(m=>m!==name);
-  data.tasks.forEach(t => { t.assignees = (t.assignees||[]).filter(a=>a!==name); });
-  save(data); renderTeam(); renderAll();
+async function removeMember(name) {
+  if(!confirm(`Remove ${name}?`)) return;
+
+  await supabase.from("members").delete().eq("name", name);
+  await supabase.from("task_assignees").delete().eq("member_name", name);
+
+  loadData();
 }
 
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
-renderAll();
+/* ---------- INIT ---------- */
+loadData();
 </script>
 </body>
 </html>
