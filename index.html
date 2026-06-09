@@ -324,11 +324,11 @@
 </div>
 
 <script>
- 
+console.log("Supabase loaded:", window.supabase); 
 if (!window.supabase) {
   alert("Supabase failed to load. Check script tag.");
 }
-
+console.log("Supabase object:", window.supabase);
 const supabase = window.supabase.createClient(
   "https://rxspfdpubsttexhggfkm.supabase.co/rest/v1/",
   "sb_publishable_xKol_GkrttllurWrPOLroA_Vvpdht2d"
