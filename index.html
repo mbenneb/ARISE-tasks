@@ -329,7 +329,10 @@ if (!window.supabase) {
   alert("Supabase failed to load. Check script tag.");
 }
 console.log("Supabase object:", window.supabase);
-const sb = window. sb.createClient(
+
+const { createClient } = supabase;
+
+const sb = createClient(
   "https://rxspfdpubsttexhggfkm.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4c3BmZHB1YnN0dGV4aGdnZmttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5OTczNjUsImV4cCI6MjA5NjU3MzM2NX0.18OYrv6jUErWNA8OJ5LosGMzbyzRCYH189x30F1HEcU"
 );
