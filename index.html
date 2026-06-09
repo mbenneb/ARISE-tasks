@@ -329,7 +329,7 @@ if (!window.supabase) {
   alert("Supabase failed to load. Check script tag.");
 }
 console.log("Supabase object:", window.supabase);
-const supabase = window.supabase.createClient(
+const sb = window. sb.createClient(
   "https://rxspfdpubsttexhggfkm.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4c3BmZHB1YnN0dGV4aGdnZmttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5OTczNjUsImV4cCI6MjA5NjU3MzM2NX0.18OYrv6jUErWNA8OJ5LosGMzbyzRCYH189x30F1HEcU"
 );
@@ -351,9 +351,9 @@ function escHtml(s) {
 
 /* ---------- LOAD DATA ---------- */
 async function loadData() {
-  const { data: tasksData } = await supabase.from("tasks").select("*");
-  const { data: membersData } = await supabase.from("members").select("*");
-  const { data: links } = await supabase.from("task_assignees").select("*");
+  const { data: tasksData } = await  sb.from("tasks").select("*");
+  const { data: membersData } = await  sb.from("members").select("*");
+  const { data: links } = await  sb.from("task_assignees").select("*");
 
   data.tasks = tasksData.map(t => ({
     id: t.id,
@@ -452,7 +452,7 @@ function renderAll() { renderKanban(); renderList(); renderTeam(); }
 /* ---------- TASK ACTIONS ---------- */
 async function toggleDone(id) {
   const t = data.tasks.find(t=>t.id===id);
-  await supabase.from("tasks")
+  await  sb.from("tasks")
     .update({ status: t.status==='done' ? 'todo' : 'done' })
     .eq("id", id);
 
@@ -503,7 +503,7 @@ async function saveTask() {
 
   const id = editingId || Date.now().toString();
 
-  await supabase.from("tasks").upsert({
+  await  sb.from("tasks").upsert({
     id,
     title,
     description: document.getElementById('f-desc').value.trim(),
@@ -511,7 +511,7 @@ async function saveTask() {
     created: new Date().toISOString()
   });
 
-  await supabase.from("task_assignees").delete().eq("task_id", id);
+  await  sb.from("task_assignees").delete().eq("task_id", id);
 
   const assignees = getSelectedAssignees().map(name => ({
     task_id: id,
@@ -519,7 +519,7 @@ async function saveTask() {
   }));
 
   if (assignees.length) {
-    await supabase.from("task_assignees").insert(assignees);
+    await  sb.from("task_assignees").insert(assignees);
   }
 
   closeModal();
@@ -530,8 +530,8 @@ async function saveTask() {
 async function deleteTask() {
   if(!editingId) return;
 
-  await supabase.from("tasks").delete().eq("id", editingId);
-  await supabase.from("task_assignees").delete().eq("task_id", editingId);
+  await  sb.from("tasks").delete().eq("id", editingId);
+  await  sb.from("task_assignees").delete().eq("task_id", editingId);
 
   closeModal();
   loadData();
@@ -543,7 +543,7 @@ async function addMember() {
   const name = input.value.trim();
   if(!name) return;
 
-  await supabase.from("members").insert({ name });
+  await  sb.from("members").insert({ name });
 
   input.value = '';
   loadData();
@@ -552,8 +552,8 @@ async function addMember() {
 async function removeMember(name) {
   if(!confirm(`Remove ${name}?`)) return;
 
-  await supabase.from("members").delete().eq("name", name);
-  await supabase.from("task_assignees").delete().eq("member_name", name);
+  await  sb.from("members").delete().eq("name", name);
+  await  sb.from("task_assignees").delete().eq("member_name", name);
 
   loadData();
 }
