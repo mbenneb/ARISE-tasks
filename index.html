@@ -542,6 +542,7 @@ async function saveTask() {
   const id = editingId || Date.now().toString();
 
 
+
 const now = new Date().toISOString();
 
 await sb.from("tasks").upsert({
@@ -553,7 +554,8 @@ await sb.from("tasks").upsert({
     ? (data.tasks.find(t => t.id === editingId)?.created || now)
     : now,
   updated: now
-});
+})
+
 
 
   await  sb.from("task_assignees").delete().eq("task_id", id);
