@@ -581,6 +581,25 @@ async function removeMember(name) {
 
 /* ---------- INIT ---------- */
 loadData();
+  
+/* ---------- REAL-TIME SUBSCRIPTIONS ---------- */
+
+supabase
+  .channel('realtime-tasks')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+    console.log('Tasks changed → refreshing');
+    loadData();
+  })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, () => {
+    console.log('Assignments changed → refreshing');
+    loadData();
+  })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
+    console.log('Members changed → refreshing');
+    loadData();
+  })
+  .subscribe();
+
 </script>
 </body>
 </html>
