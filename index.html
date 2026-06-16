@@ -584,7 +584,8 @@ loadData();
   
 /* ---------- REAL-TIME SUBSCRIPTIONS ---------- */
 
-supabase
+
+sb
   .channel('realtime-tasks')
   .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
     console.log('Tasks changed → refreshing');
