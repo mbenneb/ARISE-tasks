@@ -352,6 +352,24 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function handleOverlayClick(e) {
+  const overlay = document.getElementById('modal-overlay');
+  if (e.target === overlay) {
+    closeModal();
+  }
+}
+
+function showTab(tab) {
+  ['kanban','list','team'].forEach(v => {
+    document.getElementById('view-'+v).style.display = v === tab ? 'block' : 'none';
+    const tabBtn = document.getElementById('tab-'+v);
+    if (tabBtn) tabBtn.classList.toggle('active', v === tab);
+  });
+
+  if (tab === 'list') renderList();
+  if (tab === 'team') renderTeam();
+}
+
 /* ---------- LOAD DATA ---------- */
 async function loadData() {
   const { data: tasksData } = await  sb.from("tasks").select("*");
